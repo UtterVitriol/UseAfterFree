@@ -7,49 +7,67 @@
 // link UseAfterFree2.obj /NXCOMPAT:NO /DYNAMICBASE:NO
 ////////////////////////////////////////////////////////////////////////////////////
 
+#include <windows.h>
 #include <cstdlib>
 #include <iostream>
 
-struct Result
+
+void printa(uintptr_t* data)
 {
-	uintptr_t data;
+	printf("item_a data: %llu\n", *data);
+}
+
+void printb(uintptr_t data)
+{
+	printf("item_b data: %llu\n", data);
+}
+
+struct item_a
+{
+	uintptr_t* data;
+	bool canWin;
+	void (*print)(uintptr_t* data);
 	char buff[4096];
 };
 
-struct ToMath
+struct item_b
 {
 	uintptr_t data;
+	bool canWin;
+	void (*print)(uintptr_t data);
 	char buff[4096];
 };
 
 
-Result* init_result(uintptr_t initial)
+item_a* init_item_a(uintptr_t initial)
 {
-	Result* res = (Result*)malloc(sizeof(*res));
-	if (!res)
+	item_a* itemA = (item_a*)malloc(sizeof(*itemA));
+	if (!itemA)
 	{
 		return NULL;
 	}
 
-	res->data = (uintptr_t)malloc(sizeof(uintptr_t));
-	if (!res->data)
+	itemA->data = (uintptr_t*)malloc(sizeof(itemA->data));
+	if (!itemA->data)
 	{
 		return NULL;
 	}
 
-	*(uint64_t*)res->data = initial;
+	*(uint64_t*)itemA->data = initial;
 
-	return res;
+	itemA->print = printa;
+	itemA->canWin = false;
+	return itemA;
 }
 
-void print_res(Result* res)
+void print_res(item_a* itemA)
 {
-	printf("Res: %llu\n", *(uint64_t*)res->data);
+	printf("item_a: %llu\n", *(uint64_t*)itemA->data);
 }
 
-void set_res(Result* res, uintptr_t val)
+void set_res(item_a* itemA, uintptr_t val)
 {
-	*(uint64_t*)res->data = val;
+	*(uint64_t*)itemA->data = val;
 }
 
 uintptr_t get_choice()
@@ -63,138 +81,91 @@ uintptr_t get_choice()
 	return choice;
 }
 
-void menu1()
-{
-	puts("[1] new math");
-	puts("[2] print result");
-	puts("[3] clear result");
-}
-
-void menu2()
-{
-	puts("[1] set val");
-	puts("[2] print val");
-	puts("[3] add");
-	puts("[4] sub");
-	puts("[5] clear val");
-	puts("[6] back");
-}
-
-/*
-
-Alloc res
-free res
- - set val
- - math res
-print res
-
-*/
-
 
 int main()
 {
-	Result* res = NULL;
-	ToMath* val = NULL;
+	item_a* itemA = NULL;
+	item_b* itemB = NULL;
 	uintptr_t choice = 0;
 	bool done = false;
 
 
-	
+	void (*win)(void) = NULL;
+
+	// 0x00000001400011fa : jmp rax
 
 	for (;;)
 	{
-		printf("Result: %p\n", res);
-		printf("Val: %p\n", val);
-		menu1();
-
-		choice = get_choice();
-
-		switch (choice)
-		{
-		case 1:
-			puts("here");
-			done = false;
-			//// Menu2 ////
-			for (;!done;)
-			{
-				menu2();
-
-				choice = get_choice();
-
-				switch (choice)
-				{
-				case 1:
-					choice = get_choice();
-
-					val = (ToMath*)malloc(sizeof(*val));
-					if (!val)
-					{
-						exit(1);
-					}
-
-					val->data = choice;
-					break;
-				case 2:
-					printf("Val: %llu\n", val->data);
-					break;
-				case 3:
-					*(uint64_t*)res->data += val->data;
-					break;
-				case 4:
-					*(uint64_t*)res->data -= val->data;
-					break;
-				case 5:
-					free(val);
-					break;
-				case 6:
-					done = true;
-					break;
-				}
-			}
-			//////////////
-
-			break;
-		case 2:
-			print_res(res);
-			break;
-		case 3:
-			free(res);
-			break;
-		default:
-			puts("invalid input");
-
-		}
-	}
-
-
-	/*for (;;)
-	{
-		printf("Result: %p\n", res);
-		printf("Val: %p\n", val);
-		puts("[1] alloc res");
-		puts("[2] alloc val");
-		puts("[3] free res");
-		puts("[4] free val");
+		printf("item_a: %p\n", itemA);
+		printf("item_b: %p\n", itemB);
+		puts("[1] alloc item_a");
+		puts("[2] set item_a->data");
+		puts("[3] print item_a->data");
+		puts("[4] free item_a");
+		puts("[5] alloc item_b");
+		puts("[6] set item_b.data");
+		puts("[7] print item_b.data");
+		puts("[8] free item_b");
+		puts("[9] win");
 
 		choice = get_choice();
 		switch (choice)
 		{
 		case 1:
-			res = init_result(1);
+			itemA = init_item_a(0);
 			break;
 		case 2:
-			val = (ToMath*)malloc(sizeof(*val));
+			choice = get_choice();
+			*itemA->data = choice;
 			break;
 		case 3:
-			free(res);
+			itemA->print(itemA->data);
+			Sleep(1000);
 			break;
 		case 4:
-			free(val);
+			free(itemA->data);
+			free(itemA);
+			break;
+		case 5:
+			itemB = (item_b*)malloc(sizeof(*itemB));
+			itemB->data = 0;
+			itemB->print = printb;
+			itemB->canWin = false;
+			break;
+		case 6:
+			choice = get_choice();
+			itemB->data = choice;
+			break;
+		case 7:
+			itemB->print(itemB->data);
+			Sleep(1000);
+		case 8:
+			free(itemB);
+			break;
+		case 9:
+			if (itemB && itemB->canWin)
+			{
+				for (int i = 0; i < 100; i++)
+				{
+					puts("You win!");
+				}
+				Sleep(1000);
+				return 0;
+			}
+			else
+			{
+				puts("Uh-oh, you haven't won yet");
+				Sleep(1000);
+			}
+			break;
+
+		default:
+			puts("Invalid Option");
+			Sleep(1000);
 			break;
 		}
 
-	}*/
-
-
+		
+	}
 
 }
